@@ -69,17 +69,24 @@ Client.prototype.broadcastTransaction = function(transaction){
  * behavior: if the transaction is valid, adds it to unvalidatedTransactions.
  */
 Client.prototype.onReceivingTransaction = function(transaction, senderId){
-
+  if ( this.verify(transaction) ) this.unvalidatedTransactions.push ( transaction );
 };
 /*
  * PLEASE EDIT
  * dependencies: Client.prototype.validateSolution
  * params: null
  * returns: Number
- * behavior: generates a solution to the proof-of-work problem (for which client.verify returns true) and broadcasts it along with unvalidated transactions to all clients.
+ * behavior: generates a solution to the proof-of-work problem (for which client.validateSolution returns true) and broadcasts it along with unvalidated transactions to all clients.
  */
 Client.prototype.mine = function(){
+  var solution;
+  var thisClient = this;
 
+  while ( !this.validateSolution ( solution ) ) {
+    var solution = Math.random();
+  }
+  
+  this.broadcastSolution ( solution, thisClient.unvalidatedTransactions );
   return solution;
 };
 /*
@@ -88,12 +95,12 @@ Client.prototype.mine = function(){
  * returns: null
  * behavior: broadcasts solution, a copy of unvalidatedTransactions, and thisClient's id to all clients.
  */
-Client.prototype.broadcastSolution = function(solution, transactions){
+Client.prototype.broadcastSolution = function( solution, transactions ){
   var i, len;
   i = 0;
   len = clients.length;
   for ( i; i < len; i++ ) {
-    clients[i].onReceivingSolution ( solution, transactions, len[i].id );
+    clients[i].onReceivingSolution ( solution, transactions, this.id );
   }
 };
 /*
@@ -104,11 +111,6 @@ Client.prototype.broadcastSolution = function(solution, transactions){
  */
 Client.prototype.onReceivingSolution = function(solution, transactions, solverId){
 
-  if ( verifyAll (transactions) ) {
-    //generate reward
-    //solution
-    updateBlochchain ( transactions ); 
-  }
   // helpers (DO NOT EDIT)
   function verifyAll(transactions){
     return transactions.reduce(function(transactionsValid, transaction){
@@ -122,9 +124,7 @@ Client.prototype.onReceivingSolution = function(solution, transactions, solverId
       thisClient.unusedValidTransactions[transaction.id] = transaction;
       // clear txn from unvalidatedTransactions
       var i = thisClient.unvalidatedTransactions.indexOf(transaction);
-      if(i >= 0){
-        thisClient.unvalidatedTransactions.splice(i, 1);
-      }
+      if(i >= 0) thisClient.unvalidatedTransactions.splice(i, 1);
     });
 
     function deleteUsedInputTransactions(transaction){
@@ -133,6 +133,17 @@ Client.prototype.onReceivingSolution = function(solution, transactions, solverId
       });
     }
   }
+
+  var thisClient = this;
+
+  if ( verifyAll (transactions) && thisClient.validateSolution(solution) ) {
+    //generate reward
+    //solution
+    var rewardtxn = this.generateRewardTransaction ( solution, solverId, 50 );
+    transactions.push ( rewardtxn );
+    updateBlockchain ( transactions );
+  }
+
 };
 /*
  * PLEASE EDIT
@@ -154,6 +165,9 @@ Client.prototype.balance = function(){
  */
 Client.prototype.verify = function(transaction){
   // each input must be valid, unused, and name the sender as a destination
+  var isTransactionValid;
+  if ( transaction.outputsValid() && transaction.inputsValid(this.unusedValidTransactions) && transaction.sender) { isTransactionValid = true; }
+  else { isTransactionValid = false; }
 
   return isTransactionValid;
 };
@@ -245,13 +259,13 @@ Transaction.prototype.sumToDestination = function(clientId){
   }, 0 );
 };
 
-// var initialTxn = alice.generateRewardTransaction(0, 'alice', 10); // how does this really happen?
-// alice.unusedValidTransactions[initialTxn.id] = initialTxn;
-// bob.unusedValidTransactions[initialTxn.id] = initialTxn;
-// carl.unusedValidTransactions[initialTxn.id] = initialTxn;
-// console.log('alice given initial amount 10 via',initialTxn.id);
+var initialTxn = alice.generateRewardTransaction(0, 'alice', 10); // how does this really happen?
+alice.unusedValidTransactions[initialTxn.id] = initialTxn;
+bob.unusedValidTransactions[initialTxn.id] = initialTxn;
+carl.unusedValidTransactions[initialTxn.id] = initialTxn;
+console.log('alice given initial amount 10 via',initialTxn.id);
 
-// alice.give('bob', 1);
-// alice.give('carl', 2);
-// alice.give('alice', 3);
-// carl.mine();
+alice.give('bob', 1);
+alice.give('carl', 2);
+alice.give('alice', 3);
+carl.mine();
